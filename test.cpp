@@ -10,9 +10,8 @@ struct Vec3f
 int main()
 {
     int x=0;
-    
+    str = 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
     return 0;
 
-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
-
+    
 }
