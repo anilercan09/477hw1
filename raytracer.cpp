@@ -1,0 +1,378 @@
+#include <iostream>
+#include "parser.h"
+#include "ppm.h"
+
+#include "math.h"
+#define INFTY 99999
+
+using namespace std;
+using namespace parser;
+
+
+
+typedef unsigned char RGB[3];
+
+struct Ray
+{
+    Vec3f o;
+    Vec3f d;
+};
+
+
+
+Vec3f operator*( const Vec3f& a,  const Vec3f& b)
+{
+    Vec3f result;
+    result.x = a.y * b.z - a.z * b.y;
+    result.y = a.z * b.x - a.x * b.z;
+    result.z = a.x * b.y - a.y * b.x;
+    return result;
+}
+
+Vec3f operator*( const Vec3f& a, float b)
+{
+    Vec3f res;
+    res.x = a.x * b;
+    res.y = a.y * b;
+    res.z = a.z * b;
+    return res;
+}
+
+float dotProduct(const Vec3f &a, const Vec3f &b)
+{
+	return a.x*b.x + a.y*b.y + a.z*b.z;
+}
+Vec3f operator+( const Vec3f& a,  const Vec3f& b)
+{
+    Vec3f res;
+    res.x = a.x + b.x;
+    res.y = a.y + b.y;
+    res.z = a.z + b.z;
+    return res;
+}
+
+Vec3f operator-( const Vec3f& a,  const Vec3f& b)
+{
+    Vec3f res;
+    res.x = a.x - b.x;
+    res.y = a.y - b.y;
+    res.z = a.z - b.z;
+    return res;
+}
+
+Vec3f normalizeVector(const Vec3f& v)
+{
+    Vec3f res;
+    float length = sqrt( v.x * v.x + v.y * v.y + v.z * v.z );
+    res.x = v.x / length;
+    res.y = v.y / length;
+    res.z = v.z / length;
+    return res;
+}
+
+
+
+Ray computeRay(const Camera& cam, int pixel_x, int pixel_y, int width, int height )
+{
+    
+    Ray result;  
+    
+    float l = cam.near_plane.x;
+    float r = cam.near_plane.y;
+    float b = cam.near_plane.z;
+    float t = cam.near_plane.w;
+
+    Vec3f v = cam.up;
+    
+    Vec3f gaze = cam.gaze;
+    
+    float dist = cam.near_distance;
+    
+    Vec3f u = gaze*v;
+    u = normalizeVector(u);
+
+    Vec3f m = cam.position + gaze*dist;
+    
+    Vec3f q = m + u*l + v*t;
+
+    float su = (pixel_y+0.5)*(r-l)/width;
+    float sv = (pixel_x+0.5)*(t-b)/height;
+
+    Vec3f s = q+u*su-v*sv;
+    
+    result.o = cam.position;
+    result.d = normalizeVector(s-cam.position);
+    
+    return result;
+    
+}
+
+
+
+void checkSphereIntersection(const Ray& ray,  const Scene& scene, const int& i, float& t_min, int& type_of_closest_object, int& index_of_closest_object )
+{
+    Vec3f d = ray.d;
+    Vec3f o = ray.o;
+
+    Sphere sphere = scene.spheres[i];
+
+    Vec3f c = scene.vertex_data[sphere.center_vertex_id-1];
+    
+    float r = sphere.radius;
+
+    float A = dotProduct(ray.d, ray.d);
+	Vec3f tmp = ray.o - c;
+	float B = 2*dotProduct(ray.d, tmp);
+	float C = dotProduct(tmp, tmp)-r*r;
+
+	float disc = B*B - 4*A*C;
+   
+    if(disc<0)
+    {
+        return;
+    }
+    else // disc = 1 & 2. use epsilon if case 1 to be implemented individually.
+    {
+        float t1 = (-1*B+sqrt(disc))/(2*A);
+        float t2 = (-1*B-sqrt(disc))/(2*A);
+        float tmin = fmin(t1,t2);
+
+        
+        if ( tmin < t_min )
+        {
+            
+            t_min = tmin;
+            type_of_closest_object = 0;
+            index_of_closest_object = i;
+        }
+        
+        return;
+    }
+    
+}
+
+
+
+
+Vec3f getColor(const Scene& scene, int index, int type )
+{
+    Vec3f color;
+    switch (type)
+    {
+    case 0:/* sphere  */
+        
+        color.x = scene.ambient_light.x  * scene.materials[scene.spheres[index].material_id -1 ].ambient.x;
+        color.y = scene.ambient_light.y  * scene.materials[scene.spheres[index].material_id -1 ].ambient.y;
+        color.z = scene.ambient_light.z  * scene.materials[scene.spheres[index].material_id -1 ].ambient.z;
+
+        color.x += scene.point_lights[0].intensity.x * scene.materials[scene.spheres[index].material_id -1 ].diffuse.x;
+        color.y += scene.point_lights[0].intensity.y * scene.materials[scene.spheres[index].material_id -1 ].diffuse.y;
+        color.z += scene.point_lights[0].intensity.z * scene.materials[scene.spheres[index].material_id -1 ].diffuse.z;
+        break;
+
+    case 1:/* triangle  */
+        color.x = scene.ambient_light.x  * scene.materials[scene.triangles[index].material_id -1 ].ambient.x;
+        color.y = scene.ambient_light.y  * scene.materials[scene.triangles[index].material_id -1 ].ambient.y;
+        color.z = scene.ambient_light.z  * scene.materials[scene.triangles[index].material_id -1 ].ambient.z;
+
+        color.x += scene.point_lights[0].intensity.x * scene.materials[scene.triangles[index].material_id -1 ].diffuse.x;
+        color.y += scene.point_lights[0].intensity.y * scene.materials[scene.triangles[index].material_id -1 ].diffuse.y;
+        color.z += scene.point_lights[0].intensity.z * scene.materials[scene.triangles[index].material_id -1 ].diffuse.z;
+        break;
+
+    case 2:/* mesh  */
+        color.x = scene.ambient_light.x  * scene.materials[scene.meshes[index].material_id -1 ].ambient.x;
+        color.y = scene.ambient_light.y  * scene.materials[scene.meshes[index].material_id -1 ].ambient.y;
+        color.z = scene.ambient_light.z  * scene.materials[scene.meshes[index].material_id -1 ].ambient.z;
+
+        color.x += scene.point_lights[0].intensity.x * scene.materials[scene.meshes[index].material_id -1 ].diffuse.x;
+        color.y += scene.point_lights[0].intensity.y * scene.materials[scene.meshes[index].material_id -1 ].diffuse.y;
+        color.z += scene.point_lights[0].intensity.z * scene.materials[scene.meshes[index].material_id -1 ].diffuse.z;
+        break;
+
+    case -1:
+        color.x = scene.background_color.x ;
+        color.y = scene.background_color.y ;
+        color.z = scene.background_color.z ;
+        break;
+    }
+    return color;
+}
+
+int discretizeColor(float color)
+{
+    int res;
+    if(color > 255)
+    {
+        res = 255;
+    }
+    else
+    {
+        res = round(color) ;
+    }
+    return res;      
+
+}
+
+float determinant(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2 )
+{
+    return v0.x*(v1.y*v2.z - v1.z*v2.y) + v0.y*(v1.z*v2.x - v1.x*v2.z) + v0.z*(v1.x*v2.y - v1.y*v2.x);
+}
+
+void checkTriangleIntersection(const Ray& ray,  const Scene& scene, const int& i, float& t_min, int& type_of_closest_object, int& index_of_closest_object )
+{
+    Vec3f d = ray.d;
+    Vec3f o = ray.o;
+
+    Triangle triangle = scene.triangles[i];
+    Vec3f v0 = scene.vertex_data[triangle.indices.v0_id -1 ];
+    Vec3f v1 = scene.vertex_data[triangle.indices.v1_id -1 ];
+    Vec3f v2 = scene.vertex_data[triangle.indices.v2_id -1 ];
+
+    float detA,beta,gamma,t;
+
+    detA=determinant(v0-v1, v0-v2, d);
+    beta = determinant(v0-o,v0-v2,d)/detA;
+    gamma = determinant(v0-v1,v0-o,d)/detA;
+    t = determinant(v0-v1,v0-v2,v0-o)/detA;
+
+    if(beta+gamma > 1)
+    {
+        return;
+    }
+    else if(beta<0)
+    {
+        return;
+    }
+    else if(gamma<0)
+    {
+        return;
+    }
+    else //Ray hit with some triangle. Check if it is the closest.
+    {
+        if(t<t_min)
+        {
+            t_min=t;
+            type_of_closest_object=1;
+            index_of_closest_object=i;
+            return;
+        }
+        else
+        {
+            return;
+        }
+    }
+}
+
+void checkMeshIntersection(const Ray& ray,  const Scene& scene, const int& i, int& face_number, float& t_min, int& type_of_closest_object, int& index_of_closest_object )
+{
+    Vec3f d = ray.d;
+    Vec3f o = ray.o;
+
+    Mesh mesh = scene.meshes[i];
+    int face_amount = mesh.faces.size();
+
+    for(int j=0; j<face_amount; j++)
+    {
+        
+        Vec3f v0 = scene.vertex_data[ mesh.faces[j].v0_id -1 ];
+        Vec3f v1 = scene.vertex_data[ mesh.faces[j].v1_id -1 ];
+        Vec3f v2 = scene.vertex_data[ mesh.faces[j].v2_id -1 ];
+        float detA,beta,gamma,t;
+
+        detA=determinant(v0-v1, v0-v2, d);
+        beta = determinant(v0-o,v0-v2,d)/detA;
+        gamma = determinant(v0-v1,v0-o,d)/detA;
+        t = determinant(v0-v1,v0-v2,v0-o)/detA;
+
+        if(beta+gamma > 1)
+        {
+            continue;
+        }
+        else if(beta<0)
+        {
+            continue;
+        }
+        else if(gamma<0)
+        {
+            continue;
+        }
+        else //Ray hit with some triangle. Check if it is the closest.
+        {
+            if(t<t_min)
+            {
+                t_min=t;
+                type_of_closest_object=2;
+                index_of_closest_object=i;
+                face_number = j;
+                continue;
+            }
+            else
+            {
+                continue;
+            }
+        }
+    }
+    
+}
+
+int main(int argc, char* argv[])
+{
+    
+    parser::Scene scene;
+
+    scene.loadFromXml(argv[1]);
+
+    int camera_amount = scene.cameras.size();
+    
+    for(int i=0 ; i < camera_amount ; i++)
+    {
+
+        int width = scene.cameras[i].image_width;
+        int height = scene.cameras[i].image_height;
+        unsigned char* image = new unsigned char [width * height * 3];
+
+        Camera c = scene.cameras[i];
+        int sphere_count = scene.spheres.size();
+        int triangle_count = scene.triangles.size();
+        int mesh_count = scene.meshes.size();
+        int ppm_pixel=0;
+        for(int j=0 ; j < height ; j++)
+        {
+            for(int k=0 ; k < width ; k++)
+            {
+                int type_of_closest_object = -1;
+                int index_of_closest_object = -1;
+                int face_num = -1;
+                Ray ray = computeRay(c, j, k, width, height);
+                
+                float t_min = INFTY;
+                for( int a = 0; a < sphere_count ; a++) //for each sphere get t_min
+                {      
+                    checkSphereIntersection(ray, scene, a , t_min,  type_of_closest_object, index_of_closest_object);
+                }
+                
+                for(int a = 0; a < triangle_count ; a++) //for each triangle get t_min
+                {
+                    checkTriangleIntersection(ray, scene, a, t_min, type_of_closest_object, index_of_closest_object);
+                }
+                
+                for(int a = 0; a< mesh_count ; a++) //for each mesh get t_min
+                {
+                    checkMeshIntersection(ray, scene, a, face_num, t_min, type_of_closest_object, index_of_closest_object);
+                }
+                
+                
+                Vec3f final_color = getColor(scene, index_of_closest_object, type_of_closest_object);
+
+                image[ppm_pixel++] =  discretizeColor(final_color.x);
+                image[ppm_pixel++] =  discretizeColor(final_color.y);
+                image[ppm_pixel++] =  discretizeColor(final_color.z);
+
+            }
+
+        }
+        write_ppm(c.image_name.c_str(), image, width, height);
+    }
+
+}
