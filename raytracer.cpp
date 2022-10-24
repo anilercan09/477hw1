@@ -60,6 +60,15 @@ Vec3f operator-( const Vec3f& a,  const Vec3f& b)
     return res;
 }
 
+Vec3f operator/( const Vec3f& a, float b)
+{
+    Vec3f res;
+    res.x = a.x / b;
+    res.y = a.y / b;
+    res.z = a.z / b;
+    return res;
+}
+
 Vec3f normalizeVector(const Vec3f& v)
 {
     Vec3f res;
@@ -74,37 +83,37 @@ Vec3f normalizeVector(const Vec3f& v)
 
 Ray computeRay(const Camera& cam, int pixel_x, int pixel_y, int width, int height )
 {
-    
-    Ray result;  
-    
+
+    Ray result;
+
     float l = cam.near_plane.x;
     float r = cam.near_plane.y;
     float b = cam.near_plane.z;
     float t = cam.near_plane.w;
 
     Vec3f v = cam.up;
-    
+
     Vec3f gaze = cam.gaze;
-    
+
     float dist = cam.near_distance;
-    
+
     Vec3f u = gaze*v;
     u = normalizeVector(u);
 
     Vec3f m = cam.position + gaze*dist;
-    
+
     Vec3f q = m + u*l + v*t;
 
     float su = (pixel_y+0.5)*(r-l)/width;
     float sv = (pixel_x+0.5)*(t-b)/height;
 
     Vec3f s = q+u*su-v*sv;
-    
+
     result.o = cam.position;
     result.d = normalizeVector(s-cam.position);
-    
+
     return result;
-    
+
 }
 
 
@@ -117,7 +126,7 @@ void checkSphereIntersection(const Ray& ray,  const Scene& scene, const int& i, 
     Sphere sphere = scene.spheres[i];
 
     Vec3f c = scene.vertex_data[sphere.center_vertex_id-1];
-    
+
     float r = sphere.radius;
 
     float A = dotProduct(ray.d, ray.d);
@@ -126,7 +135,7 @@ void checkSphereIntersection(const Ray& ray,  const Scene& scene, const int& i, 
 	float C = dotProduct(tmp, tmp)-r*r;
 
 	float disc = B*B - 4*A*C;
-   
+
     if(disc<0)
     {
         return;
@@ -137,37 +146,85 @@ void checkSphereIntersection(const Ray& ray,  const Scene& scene, const int& i, 
         float t2 = (-1*B-sqrt(disc))/(2*A);
         float tmin = fmin(t1,t2);
 
-        
+
         if ( tmin < t_min )
         {
-            
+
             t_min = tmin;
             type_of_closest_object = 0;
             index_of_closest_object = i;
         }
-        
+
         return;
     }
-    
+
+}
+
+
+float findDistance(const Vec3f& a, const Vec3f& b)
+{
+    return sqrtf(pow(a.x-b.x,2) + pow(a.y-b.y,2) + pow(a.z-b.z,2));
+}
+
+float findLength(const Vec3f& a)
+{
+    return sqrtf(a.x*a.x + a.y*a.y + a.z*a.z);
 }
 
 
 
 
-Vec3f getColor(const Scene& scene, int index, int type )
+Vec3f getColor(const Scene& scene, const Vec3f& hit_location, const Vec3f& camera_location, const Vec3f& normal, int index, int type )
 {
-    Vec3f color;
+
+    int amount_of_point_lights = scene.point_lights.size();
+    Vec3f color, w_i, w_o, h, k_d, k_s, irradiance;
+    float cos_theta, cos_alpha, squared_distance_to_light, phong_exponent;
+
+
     switch (type)
     {
     case 0:/* sphere  */
-        
-        color.x = scene.ambient_light.x  * scene.materials[scene.spheres[index].material_id -1 ].ambient.x;
-        color.y = scene.ambient_light.y  * scene.materials[scene.spheres[index].material_id -1 ].ambient.y;
-        color.z = scene.ambient_light.z  * scene.materials[scene.spheres[index].material_id -1 ].ambient.z;
 
-        color.x += scene.point_lights[0].intensity.x * scene.materials[scene.spheres[index].material_id -1 ].diffuse.x;
-        color.y += scene.point_lights[0].intensity.y * scene.materials[scene.spheres[index].material_id -1 ].diffuse.y;
-        color.z += scene.point_lights[0].intensity.z * scene.materials[scene.spheres[index].material_id -1 ].diffuse.z;
+        color.x += scene.ambient_light.x  * scene.materials[scene.spheres[index].material_id -1 ].ambient.x;
+        color.y += scene.ambient_light.y  * scene.materials[scene.spheres[index].material_id -1 ].ambient.y;
+        color.z += scene.ambient_light.z  * scene.materials[scene.spheres[index].material_id -1 ].ambient.z;
+
+        for(int i=0; i < amount_of_point_lights; i++)
+        {
+
+
+
+            Vec3f light_location = scene.point_lights[i].position;
+            w_i = normalizeVector(light_location - hit_location);
+            cos_theta =  max(0.0f,dotProduct(w_i,normal));
+            k_d = scene.materials[scene.spheres[index].material_id -1 ].diffuse;
+            squared_distance_to_light = pow(findDistance(hit_location, light_location),2);
+
+            w_o = normalizeVector(camera_location - hit_location);
+            h = normalizeVector(w_i+w_o);
+            cos_alpha = max(0.0f, dotProduct(normal,h));
+            k_s = scene.materials[scene.spheres[index].material_id -1 ].specular;
+            phong_exponent = scene.materials[scene.spheres[index].material_id -1 ].phong_exponent;
+
+            irradiance.x = scene.point_lights[i].intensity.x/squared_distance_to_light;
+            irradiance.y = scene.point_lights[i].intensity.y/squared_distance_to_light;
+            irradiance.z = scene.point_lights[i].intensity.z/squared_distance_to_light;
+
+
+            color.x += k_d.x * cos_theta * irradiance.x;
+            color.y += k_d.y * cos_theta * irradiance.y;
+            color.z += k_d.z * cos_theta * irradiance.z;
+
+            color.x += k_s.x * pow(cos_alpha,phong_exponent) * irradiance.x;
+            color.y += k_s.y * pow(cos_alpha,phong_exponent) * irradiance.y;
+            color.z += k_s.z * pow(cos_alpha,phong_exponent) * irradiance.z;
+
+
+
+        }
+
+
         break;
 
     case 1:/* triangle  */
@@ -210,7 +267,7 @@ int discretizeColor(float color)
     {
         res = round(color) ;
     }
-    return res;      
+    return res;
 
 }
 
@@ -274,7 +331,7 @@ void checkMeshIntersection(const Ray& ray,  const Scene& scene, const int& i, in
 
     for(int j=0; j<face_amount; j++)
     {
-        
+
         Vec3f v0 = scene.vertex_data[ mesh.faces[j].v0_id -1 ];
         Vec3f v1 = scene.vertex_data[ mesh.faces[j].v1_id -1 ];
         Vec3f v2 = scene.vertex_data[ mesh.faces[j].v2_id -1 ];
@@ -313,18 +370,34 @@ void checkMeshIntersection(const Ray& ray,  const Scene& scene, const int& i, in
             }
         }
     }
-    
+
 }
+
+Vec3f hitPoint(const Ray& r, float t) //directly return res?
+{
+    Vec3f res = r.d*t;
+    return res;
+}
+
+Vec3f sphereNormal(const Vec3f& c, const Vec3f& p, const float& r)
+{
+    Vec3f res;
+    res = normalizeVector( (p-c) / r );
+    return res;
+}
+
+
+
 
 int main(int argc, char* argv[])
 {
-    
+
     parser::Scene scene;
 
     scene.loadFromXml(argv[1]);
 
     int camera_amount = scene.cameras.size();
-    
+
     for(int i=0 ; i < camera_amount ; i++)
     {
 
@@ -333,6 +406,7 @@ int main(int argc, char* argv[])
         unsigned char* image = new unsigned char [width * height * 3];
 
         Camera c = scene.cameras[i];
+        Vec3f camera_location = c.position;
         int sphere_count = scene.spheres.size();
         int triangle_count = scene.triangles.size();
         int mesh_count = scene.meshes.size();
@@ -345,25 +419,33 @@ int main(int argc, char* argv[])
                 int index_of_closest_object = -1;
                 int face_num = -1;
                 Ray ray = computeRay(c, j, k, width, height);
-                
+
                 float t_min = INFTY;
                 for( int a = 0; a < sphere_count ; a++) //for each sphere get t_min
-                {      
+                {
                     checkSphereIntersection(ray, scene, a , t_min,  type_of_closest_object, index_of_closest_object);
                 }
-                
+
                 for(int a = 0; a < triangle_count ; a++) //for each triangle get t_min
                 {
                     checkTriangleIntersection(ray, scene, a, t_min, type_of_closest_object, index_of_closest_object);
                 }
-                
+
                 for(int a = 0; a< mesh_count ; a++) //for each mesh get t_min
                 {
                     checkMeshIntersection(ray, scene, a, face_num, t_min, type_of_closest_object, index_of_closest_object);
                 }
-                
-                
-                Vec3f final_color = getColor(scene, index_of_closest_object, type_of_closest_object);
+
+                Vec3f hit_point = hitPoint(ray,t_min);
+                Vec3f normal;
+                if(type_of_closest_object == 0)
+                {
+                    Sphere s = scene.spheres[index_of_closest_object];
+                    normal = sphereNormal(scene.vertex_data[s.center_vertex_id -1], hit_point, s.radius);
+                }
+
+
+                Vec3f final_color = getColor(scene, hit_point, camera_location, normal, index_of_closest_object,type_of_closest_object);
 
                 image[ppm_pixel++] =  discretizeColor(final_color.x);
                 image[ppm_pixel++] =  discretizeColor(final_color.y);
