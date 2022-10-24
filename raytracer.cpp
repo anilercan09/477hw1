@@ -18,6 +18,12 @@ struct Ray
     Vec3f d;
 };
 
+struct colorScalars
+{
+
+    Vec3f color, w_i, w_o, h, k_d, k_s, irradiance;
+    float cos_theta, cos_alpha, squared_distance_to_light, phong_exponent;
+};
 
 
 Vec3f operator*( const Vec3f& a,  const Vec3f& b)
@@ -172,14 +178,30 @@ float findLength(const Vec3f& a)
 }
 
 
-
-
-Vec3f getColor(const Scene& scene, const Vec3f& hit_location, const Vec3f& camera_location, const Vec3f& normal, int index, int type )
+Vec3f getColor(const Scene& scene, const colorScalars& color_scalars, const Vec3f& hit_location, const Vec3f& camera_location, const Vec3f& normal, int& index, int& type)
 {
+    Vec3f color;
 
+    color.x += color_scalars.k_d.x * color_scalars.cos_theta * color_scalars.irradiance.x;
+    color.y += color_scalars.k_d.y * color_scalars.cos_theta * color_scalars.irradiance.y;
+    color.z += color_scalars.k_d.z * color_scalars.cos_theta * color_scalars.irradiance.z;
+
+    color.x += color_scalars.k_s.x * pow(color_scalars.cos_alpha,color_scalars.phong_exponent) * color_scalars.irradiance.x;
+    color.y += color_scalars.k_s.y * pow(color_scalars.cos_alpha,color_scalars.phong_exponent) * color_scalars.irradiance.y;
+    color.z += color_scalars.k_s.z * pow(color_scalars.cos_alpha,color_scalars.phong_exponent) * color_scalars.irradiance.z;
+
+    return color;
+
+
+
+
+}
+
+Vec3f getColorScalars(const Scene& scene, const Vec3f& hit_location, const Vec3f& camera_location, const Vec3f& normal, int index, int type )
+{
+    colorScalars color_scalars;
+    Vec3f color, light_location;
     int amount_of_point_lights = scene.point_lights.size();
-    Vec3f color, w_i, w_o, h, k_d, k_s, irradiance;
-    float cos_theta, cos_alpha, squared_distance_to_light, phong_exponent;
 
 
     switch (type)
@@ -195,30 +217,28 @@ Vec3f getColor(const Scene& scene, const Vec3f& hit_location, const Vec3f& camer
 
 
 
-            Vec3f light_location = scene.point_lights[i].position;
-            w_i = normalizeVector(light_location - hit_location);
-            cos_theta =  max(0.0f,dotProduct(w_i,normal));
-            k_d = scene.materials[scene.spheres[index].material_id -1 ].diffuse;
-            squared_distance_to_light = pow(findDistance(hit_location, light_location),2);
+            light_location = scene.point_lights[i].position;
 
-            w_o = normalizeVector(camera_location - hit_location);
-            h = normalizeVector(w_i+w_o);
-            cos_alpha = max(0.0f, dotProduct(normal,h));
-            k_s = scene.materials[scene.spheres[index].material_id -1 ].specular;
-            phong_exponent = scene.materials[scene.spheres[index].material_id -1 ].phong_exponent;
+            color_scalars.w_i = normalizeVector(light_location - hit_location);
+            color_scalars.cos_theta =  max(0.0f,dotProduct(color_scalars.w_i,normal));
+            color_scalars.k_d = scene.materials[scene.spheres[index].material_id -1 ].diffuse;
+            color_scalars.squared_distance_to_light = pow(findDistance(hit_location, light_location),2);
 
-            irradiance.x = scene.point_lights[i].intensity.x/squared_distance_to_light;
-            irradiance.y = scene.point_lights[i].intensity.y/squared_distance_to_light;
-            irradiance.z = scene.point_lights[i].intensity.z/squared_distance_to_light;
+            color_scalars.w_o = normalizeVector(camera_location - hit_location);
+            color_scalars.h = normalizeVector(color_scalars.w_i+color_scalars.w_o);
+            color_scalars.cos_alpha = max(0.0f, dotProduct(normal,color_scalars.h));
+            color_scalars.k_s = scene.materials[scene.spheres[index].material_id -1 ].specular;
+            color_scalars.phong_exponent = scene.materials[scene.spheres[index].material_id -1 ].phong_exponent;
 
+            color_scalars.irradiance.x = scene.point_lights[i].intensity.x/color_scalars.squared_distance_to_light;
+            color_scalars.irradiance.y = scene.point_lights[i].intensity.y/color_scalars.squared_distance_to_light;
+            color_scalars.irradiance.z = scene.point_lights[i].intensity.z/color_scalars.squared_distance_to_light;
 
-            color.x += k_d.x * cos_theta * irradiance.x;
-            color.y += k_d.y * cos_theta * irradiance.y;
-            color.z += k_d.z * cos_theta * irradiance.z;
+            Vec3f color_add = getColor(scene, color_scalars, hit_location, camera_location, normal, index, type);
 
-            color.x += k_s.x * pow(cos_alpha,phong_exponent) * irradiance.x;
-            color.y += k_s.y * pow(cos_alpha,phong_exponent) * irradiance.y;
-            color.z += k_s.z * pow(cos_alpha,phong_exponent) * irradiance.z;
+            color.x += color_add.x;
+            color.y += color_add.y;
+            color.z += color_add.z;
 
 
 
@@ -445,7 +465,7 @@ int main(int argc, char* argv[])
                 }
 
 
-                Vec3f final_color = getColor(scene, hit_point, camera_location, normal, index_of_closest_object,type_of_closest_object);
+                Vec3f final_color = getColorScalars(scene, hit_point, camera_location, normal, index_of_closest_object,type_of_closest_object);
 
                 image[ppm_pixel++] =  discretizeColor(final_color.x);
                 image[ppm_pixel++] =  discretizeColor(final_color.y);
