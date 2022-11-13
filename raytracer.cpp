@@ -157,15 +157,15 @@ float determinant(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2 )
 
 float findDistance(const Vec3f& a, const Vec3f& b)
 {
-    return sqrtf(pow(a.x-b.x,2) + pow(a.y-b.y,2) + pow(a.z-b.z,2));
+    return sqrt(pow(a.x-b.x,2) + pow(a.y-b.y,2) + pow(a.z-b.z,2));
 }
 
 float findLength(const Vec3f& a)
 {
-    return sqrtf(a.x*a.x + a.y*a.y + a.z*a.z);
+    return sqrt(a.x*a.x + a.y*a.y + a.z*a.z);
 }
 
-void checkSphereIntersection(const Ray& ray,  const Scene& scene, const int& i, float& t_min, int& type_of_closest_object, int& index_of_closest_object )
+void checkSphereIntersection(const Ray& ray,  const Scene& scene, const int& i, float& t_min, float& t_max, bool look_shadow, int& type_of_closest_object, int& index_of_closest_object )
 {
     Vec3f d = ray.d;
     Vec3f o = ray.o;
@@ -191,27 +191,45 @@ void checkSphereIntersection(const Ray& ray,  const Scene& scene, const int& i, 
     {
         float t1 = (-1*B+sqrt(disc))/(2*A);
         float t2 = (-1*B-sqrt(disc))/(2*A);
-        float tmin = fmin(t1,t2);
+        float t = fmin(t1,t2);
 
 
-        if ( tmin < t_min && tmin > 0  )
+        if(!look_shadow)
         {
+            if ( t < t_min && t > 0.00001 )
+            {
 
-            t_min = tmin;
-            type_of_closest_object = 0;
-            index_of_closest_object = i;
+                t_min = t;
+                type_of_closest_object = 0;
+                index_of_closest_object = i;
+            }
+            return;
         }
+        else if(look_shadow)
+        {
+            if ( t < t_min && t > 0.00001 && t<t_max)
+            {
+
+                t_min = t;
+                type_of_closest_object = 0;
+                index_of_closest_object = i;
+            }
+            return;
+        }
+
+        
+        
 
         return;
     }
 
 }
 
-void checkTriangleIntersection(const Ray& ray,  const Scene& scene, const int& i, float& t_min, int& type_of_closest_object, int& index_of_closest_object )
+void checkTriangleIntersection(const Ray& ray,  const Scene& scene, const int& i, float& t_min, float& t_max, bool look_shadow, int& type_of_closest_object, int& index_of_closest_object )
 {
     Vec3f d = ray.d;
     Vec3f o = ray.o;
-
+    
     Triangle triangle = scene.triangles[i];
     Vec3f v0 = scene.vertex_data[triangle.indices.v0_id -1 ];
     Vec3f v1 = scene.vertex_data[triangle.indices.v1_id -1 ];
@@ -238,95 +256,42 @@ void checkTriangleIntersection(const Ray& ray,  const Scene& scene, const int& i
     }
     else //Ray hit with some triangle. Check if it is the closest.
     {
-        if(t<t_min && t > 0)
-        {
-            t_min=t;
-            type_of_closest_object=1;
-            index_of_closest_object=i;
-            return;
-        }
-        else
-        {
-            return;
-        }
+        if(!look_shadow)
+            {
+                if(t<t_min && t > 0.00001)
+                {
+                    t_min=t;
+                    type_of_closest_object=1;
+                    index_of_closest_object=i;
+                    
+                    return;
+                }
+            }
+            else if(look_shadow)
+            {
+                if(t<t_min && t > 0.00001 && t < t_max)
+                {
+                    t_min=t;
+                    type_of_closest_object=1;
+                    index_of_closest_object=i;
+                    return;
+                }
+            }
+            else
+            {
+                return;
+            }
     }
 }
 
-bool hitBoundingBox(const Ray& ray, const Vec3f& c, float& r)
-{
-
-    Vec3f d = ray.d;
-    Vec3f o = ray.o;
-
-    float A = dotProduct(ray.d, ray.d);
-	Vec3f tmp = ray.o - c;
-	float B = 2*dotProduct(ray.d, tmp);
-	float C = dotProduct(tmp, tmp)-r*r;
-
-	float disc = B*B - 4*A*C;
-
-    if(disc<0)
-    {
-        return false;
-    }
-    return true;
-}
-
-
-void checkMeshIntersection(const Ray& ray,  const Scene& scene, const int& i, int& face_number, float& t_min, int& type_of_closest_object, int& index_of_closest_object )
+void checkMeshIntersection(const Ray& ray,  const Scene& scene, const int& i, int& face_number, float& t_min, float& t_max, bool look_shadow, int& type_of_closest_object, int& index_of_closest_object )
 {
     Vec3f d = ray.d;
     Vec3f o = ray.o;
     
     Mesh mesh = scene.meshes[i];
     int face_amount = mesh.faces.size();
-    /*
-    float x_min, x_max, y_min, y_max, z_min, z_max;
-    x_min = y_min = z_min = INFTY;
-    x_max = y_max = z_max = 0;
-    
-    for(int j=0; j<face_amount;j++)
-    {
-        
-        Vec3f v0 = scene.vertex_data[ mesh.faces[j].v0_id -1 ];
-        Vec3f v1 = scene.vertex_data[ mesh.faces[j].v1_id -1 ];
-        Vec3f v2 = scene.vertex_data[ mesh.faces[j].v2_id -1 ];
-        float xmin, xmax, ymin, ymax, zmin, zmax;
-        xmin = min(v0.x,min(v1.x,v2.x));
-        if(xmin < x_min) x_min=xmin;
 
-        xmax = max(v0.x,max(v1.x,v2.x));
-        if(xmax > x_max) x_max = xmax;
-
-        ymin = min(v0.y,min(v1.y,v2.y));
-        if(ymin < y_min) y_min=ymin;
-
-        ymax = max(v0.y,max(v1.y,v2.y));
-        if(ymax > y_max) y_max = ymax;
-
-        zmin = min(v0.z,min(v1.z,v2.z));
-        if(zmin < z_min) z_min=zmin;
-
-        zmax = max(v0.z,max(v1.z,v2.z));
-        if(zmax > z_max) z_max = zmax;
-        
-    }
-    
-    Vec3f c;
-    float r;
-
-    c.x = (x_min + x_max)/2.0;
-    c.y = (y_min + y_max)/2.0;
-    c.z = (z_min + z_max)/2.0;
-    
-    r = max( (abs(x_min - x_max))/2.0, max( (abs(y_min - y_max))/2.0,  (abs(z_min - z_max))/2.0) );
-
-    
-    if (!hitBoundingBox(ray, c, r))
-    {
-        return;
-    }
-    */
     for(int j=0; j<face_amount; j++)
     {
 
@@ -354,13 +319,27 @@ void checkMeshIntersection(const Ray& ray,  const Scene& scene, const int& i, in
         }
         else //Ray hit with some triangle. Check if it is the closest.
         {
-            if(t<t_min && t > 0)
+            if(!look_shadow)
             {
-                t_min=t;
-                type_of_closest_object=2;
-                index_of_closest_object=i;
-                face_number = j;
-                continue;
+                if(t<t_min && t > 0.00001)
+                {
+                    t_min=t;
+                    type_of_closest_object=2;
+                    index_of_closest_object=i;
+                    face_number = j;
+                    continue;
+                }
+            }
+            else if(look_shadow)
+            {
+                if(t<t_min && t > 0.00001 && t < t_max)
+                {
+                    t_min=t;
+                    type_of_closest_object=2;
+                    index_of_closest_object=i;
+                    face_number = j;
+                    continue;
+                }
             }
             else
             {
@@ -386,7 +365,10 @@ void getEffects( const Scene& scene, Vec3f& color, const Vec3f& hit_location, co
     Ray shadowRay;
     shadowRay.o = normal*shadow_epsilon + hit_location;
     shadowRay.d = w_i;
-    int x = 0;
+    bool look_shadow = true;
+    
+    float t_max = findDistance(light_location, hit_location);
+
     float t = INFTY;
     int type_of_closest_object = -1;
     int index_of_closest_object = -1;
@@ -394,7 +376,7 @@ void getEffects( const Scene& scene, Vec3f& color, const Vec3f& hit_location, co
 
     for( int a = 0; a < sphere_count ; a++) //for each sphere get t_min
     {
-        checkSphereIntersection(shadowRay, scene, a , t,  type_of_closest_object, index_of_closest_object);
+        checkSphereIntersection(shadowRay, scene, a , t, t_max, look_shadow,  type_of_closest_object, index_of_closest_object);
         if(t<INFTY)
         {
             return;
@@ -403,7 +385,7 @@ void getEffects( const Scene& scene, Vec3f& color, const Vec3f& hit_location, co
 
     for(int a = 0; a < triangle_count ; a++) //for each triangle get t_min
     {
-        checkTriangleIntersection(shadowRay, scene, a, t, type_of_closest_object, index_of_closest_object);
+        checkTriangleIntersection(shadowRay, scene, a, t, t_max, look_shadow, type_of_closest_object, index_of_closest_object);
         if(t<INFTY)
         {
             return;
@@ -412,7 +394,7 @@ void getEffects( const Scene& scene, Vec3f& color, const Vec3f& hit_location, co
 
     for(int a = 0; a< mesh_count ; a++) //for each mesh get t_min
     {
-        checkMeshIntersection(shadowRay, scene, a, face_num, t, type_of_closest_object, index_of_closest_object);
+        checkMeshIntersection(shadowRay, scene, a, face_num, t, t_max, look_shadow, type_of_closest_object, index_of_closest_object);
         if(t<INFTY)
         {
             return;
@@ -429,7 +411,7 @@ void getEffects( const Scene& scene, Vec3f& color, const Vec3f& hit_location, co
     w_o = normalizeVector(camera_location - hit_location);
     h = normalizeVector(w_i+w_o);
     cos_alpha = max(0.0f, dotProduct(normal,h));
-
+   
 
     irradiance.x = intensity.x/squared_distance_to_light;
     irradiance.y = intensity.y/squared_distance_to_light;
@@ -538,9 +520,96 @@ Vec3f getColor(const Scene& scene, const Vec3f& hit_location, const Vec3f& camer
 }
 
 
+Vec3f recursive_func(const Scene& scene,  Ray& ray, Vec3f& camera_location, int recursion_left)
+{
+    Vec3f color;
+    int type_of_closest_object = -1;
+                int index_of_closest_object = -1;
+                int face_num = -1;
+     int sphere_count = scene.spheres.size();
+        int triangle_count = scene.triangles.size();
+        int mesh_count = scene.meshes.size();
+    float t_min = INFTY;
+                float t_max = 0;
+                bool look_shadow=false;
+                
+                for( int a = 0; a < sphere_count ; a++) //for each sphere get t_min
+                {
+                    checkSphereIntersection(ray, scene, a , t_min, t_max , look_shadow, type_of_closest_object, index_of_closest_object);
+                }
 
+                for(int a = 0; a < triangle_count ; a++) //for each triangle get t_min
+                {
+                
+                    checkTriangleIntersection(ray, scene, a, t_min, t_max, look_shadow, type_of_closest_object, index_of_closest_object);
+                }
 
+                for(int a = 0; a< mesh_count ; a++) //for each mesh get t_min
+                {
+                    checkMeshIntersection(ray, scene, a, face_num, t_min, t_max, look_shadow, type_of_closest_object, index_of_closest_object);
+                }
 
+                Vec3f hit_point = hitPoint(ray,t_min);
+                Vec3f normal;
+                bool is_mirror=false;
+                if(type_of_closest_object == 0)
+                {
+                    Sphere s = scene.spheres[index_of_closest_object];
+                    normal = sphereNormal(scene.vertex_data[s.center_vertex_id -1], hit_point, s.radius);
+                    is_mirror = scene.materials[s.material_id-1].is_mirror;
+                }
+                else if(type_of_closest_object == 1)
+                {
+                    Triangle t = scene.triangles[index_of_closest_object];
+                    normal = triangleNormal(scene.vertex_data[t.indices.v0_id-1], scene.vertex_data[t.indices.v1_id-1], scene.vertex_data[t.indices.v2_id-1]);
+                    is_mirror = scene.materials[t.material_id-1].is_mirror;
+                }
+                else if(type_of_closest_object == 2)
+                {
+                    Face f = scene.meshes[index_of_closest_object].faces[face_num];
+                    normal = triangleNormal(scene.vertex_data[f.v0_id-1], scene.vertex_data[f.v1_id-1], scene.vertex_data[f.v2_id-1]);
+                    is_mirror = scene.materials[scene.meshes[index_of_closest_object].material_id-1].is_mirror;
+                }
+                
+                
+                color = getColor(scene, hit_point, camera_location, normal, index_of_closest_object,type_of_closest_object, sphere_count, triangle_count, mesh_count);
+                    
+                        
+                if(recursion_left && is_mirror)
+                {
+                   
+                    Vec3f w_o, w_r,k_m;
+                    
+                    w_o = normalizeVector(camera_location - (ray.o+ray.d*t_min));
+                    
+                    w_r = normalizeVector(w_o*(-1)+normal*2 * (dotProduct(normal,w_o)) );
+                    if(type_of_closest_object==0)
+                    {
+                        k_m = scene.materials[scene.spheres[index_of_closest_object].material_id -1 ].mirror;
+                    }
+                    else if(type_of_closest_object==1)
+                    {
+                        k_m = scene.materials[scene.triangles[index_of_closest_object].material_id -1 ].mirror;
+                    }
+                    else if(type_of_closest_object==2)
+                    {
+                        k_m = scene.materials[scene.meshes[index_of_closest_object].material_id -1 ].mirror;
+                    }
+                    Ray w_R;
+                    w_R.o = (ray.o+ray.d*t_min);
+                    
+                    w_R.d = w_r;
+                
+                    Vec3f temp = recursive_func(scene, w_R, w_R.o, recursion_left-1);
+                    temp.x *= k_m.x;
+                    temp.y *= k_m.y;
+                    temp.z *= k_m.z;
+                    color = color + temp;
+                    
+                    
+                }    
+    return color;
+}
 
 int main(int argc, char* argv[])
 {
@@ -560,58 +629,18 @@ int main(int argc, char* argv[])
 
         Camera c = scene.cameras[i];
         Vec3f camera_location = c.position;
-        int sphere_count = scene.spheres.size();
-        int triangle_count = scene.triangles.size();
-        int mesh_count = scene.meshes.size();
+
         int ppm_pixel=0;
         for(int j=0 ; j < height ; j++)
         {
             for(int k=0 ; k < width ; k++)
             {
-                int type_of_closest_object = -1;
-                int index_of_closest_object = -1;
-                int face_num = -1;
-                Ray ray = computeRay(c, j, k, width, height);
-                Vec3f final_color;
-                float t_min = INFTY;
-                for( int a = 0; a < sphere_count ; a++) //for each sphere get t_min
-                {
-                    checkSphereIntersection(ray, scene, a , t_min,  type_of_closest_object, index_of_closest_object);
-                }
-
-                for(int a = 0; a < triangle_count ; a++) //for each triangle get t_min
-                {
-                    checkTriangleIntersection(ray, scene, a, t_min, type_of_closest_object, index_of_closest_object);
-                }
-
-                for(int a = 0; a< mesh_count ; a++) //for each mesh get t_min
-                {
-                    checkMeshIntersection(ray, scene, a, face_num, t_min, type_of_closest_object, index_of_closest_object);
-                }
-
-                Vec3f hit_point = hitPoint(ray,t_min);
-                Vec3f normal;
-                if(type_of_closest_object == 0)
-                {
-                    Sphere s = scene.spheres[index_of_closest_object];
-                    normal = sphereNormal(scene.vertex_data[s.center_vertex_id -1], hit_point, s.radius);
-                    
-                }
-                else if(type_of_closest_object == 1)
-                {
-                    Triangle t = scene.triangles[index_of_closest_object];
-                    normal = triangleNormal(scene.vertex_data[t.indices.v0_id-1], scene.vertex_data[t.indices.v1_id-1], scene.vertex_data[t.indices.v2_id-1]);
-                   
-                }
-                else if(type_of_closest_object == 2)
-                {
-                    Face f = scene.meshes[index_of_closest_object].faces[face_num];
-                    normal = triangleNormal(scene.vertex_data[f.v0_id-1], scene.vertex_data[f.v1_id-1], scene.vertex_data[f.v2_id-1]);
-                    
-                }
                 
-                final_color = getColor(scene, hit_point, camera_location, normal, index_of_closest_object,type_of_closest_object, sphere_count, triangle_count, mesh_count);
-        
+                Ray ray = computeRay(c, j, k, width, height);
+                
+                
+                Vec3f final_color = recursive_func(scene, ray, camera_location, scene.max_recursion_depth);
+                
                 
                 image[ppm_pixel++] =  discretizeColor(final_color.x);
                 image[ppm_pixel++] =  discretizeColor(final_color.y);
