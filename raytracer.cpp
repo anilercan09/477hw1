@@ -18,56 +18,56 @@ struct Ray
     Vec3f d;
 };
 
-Vec3f operator*( const Vec3f& a,  const Vec3f& b)
+Vec3f operator*(const Vec3f& v0,  const Vec3f& v1)
 {
     Vec3f result;
-    result.x = a.y * b.z - a.z * b.y;
-    result.y = a.z * b.x - a.x * b.z;
-    result.z = a.x * b.y - a.y * b.x;
+    result.x = v0.y * v1.z - v0.z * v1.y;
+    result.y = v0.z * v1.x - v0.x * v1.z;
+    result.z = v0.x * v1.y - v0.y * v1.x;
     return result;
 }
 
-Vec3f operator*( const Vec3f& a, float b)
+Vec3f operator*(const Vec3f& v0, float n)
 {
     Vec3f res;
-    res.x = a.x * b;
-    res.y = a.y * b;
-    res.z = a.z * b;
+    res.x = v0.x * n;
+    res.y = v0.y * n;
+    res.z = v0.z * n;
     return res;
 }
 
-float dotProduct(const Vec3f &a, const Vec3f &b)
+float dotProduct(const Vec3f& v0, const Vec3f& v1)
 {
-	return a.x*b.x + a.y*b.y + a.z*b.z;
+	return v0.x*v1.x + v0.y*v1.y + v0.z*v1.z;
 }
-Vec3f operator+( const Vec3f& a,  const Vec3f& b)
+Vec3f operator+(const Vec3f& v0,  const Vec3f& v1)
 {
     Vec3f res;
-    res.x = a.x + b.x;
-    res.y = a.y + b.y;
-    res.z = a.z + b.z;
+    res.x = v0.x + v1.x;
+    res.y = v0.y + v1.y;
+    res.z = v0.z + v1.z;
     return res;
 }
 
-Vec3f operator-( const Vec3f& a,  const Vec3f& b)
+Vec3f operator-(const Vec3f& v0,  const Vec3f& v1)
 {
     Vec3f res;
-    res.x = a.x - b.x;
-    res.y = a.y - b.y;
-    res.z = a.z - b.z;
+    res.x = v0.x - v1.x;
+    res.y = v0.y - v1.y;
+    res.z = v0.z - v1.z;
     return res;
 }
 
-Vec3f operator/( const Vec3f& a, float b)
+Vec3f operator/(const Vec3f& v0, float n)
 {
     Vec3f res;
-    res.x = a.x / b;
-    res.y = a.y / b;
-    res.z = a.z / b;
+    res.x = v0.x / n;
+    res.y = v0.y / n;
+    res.z = v0.z / n;
     return res;
 }
 
-Vec3f normalizeVector(const Vec3f& v)
+Vec3f unitVector(const Vec3f& v)
 {
     Vec3f res;
     float length = sqrt( v.x * v.x + v.y * v.y + v.z * v.z );
@@ -87,7 +87,7 @@ Vec3f hitPoint(const Ray& r, float t) //directly return res?
 Vec3f sphereNormal(const Vec3f& c, const Vec3f& p, const float& r)
 {
     Vec3f res;
-    res = normalizeVector( (p-c) / r );
+    res = unitVector( (p-c) / r );
     return res;
 }
 
@@ -95,7 +95,7 @@ Vec3f triangleNormal(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2)
 {
     Vec3f res;
     res = (v1-v0)*(v2-v0);
-    res = normalizeVector(res);
+    res = unitVector(res);
     return res;
 }
 
@@ -111,13 +111,13 @@ Ray computeRay(const Camera& cam, int pixel_x, int pixel_y, int width, int heigh
     float t = cam.near_plane.w;
 
     Vec3f v = cam.up;
-    v = normalizeVector(v);
+    v = unitVector(v);
     Vec3f gaze = cam.gaze;
-    gaze = normalizeVector(gaze);
+    gaze = unitVector(gaze);
     float dist = cam.near_distance;
 
     Vec3f u = gaze*v;
-    u = normalizeVector(u);
+    u = unitVector(u);
 
     Vec3f m = cam.position + gaze*dist;
 
@@ -129,10 +129,17 @@ Ray computeRay(const Camera& cam, int pixel_x, int pixel_y, int width, int heigh
     Vec3f s = q+u*su-v*sv;
 
     result.o = cam.position;
-    result.d = normalizeVector(s-cam.position);
+    result.d = unitVector(s-cam.position);
 
     return result;
 
+}
+
+
+
+float getDeterminant(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2 ) 
+{
+    return v0.x*(v1.y*v2.z - v1.z*v2.y) + v0.y*(v1.z*v2.x - v1.x*v2.z) + v0.z*(v1.x*v2.y - v1.y*v2.x);
 }
 
 int discretizeColor(float color)
@@ -150,20 +157,11 @@ int discretizeColor(float color)
 
 }
 
-float determinant(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2 )
+float getDistance(const Vec3f& v0, const Vec3f& v1)
 {
-    return v0.x*(v1.y*v2.z - v1.z*v2.y) + v0.y*(v1.z*v2.x - v1.x*v2.z) + v0.z*(v1.x*v2.y - v1.y*v2.x);
+    return sqrt(pow(v0.x-v1.x,2) + pow(v0.y-v1.y,2) + pow(v0.z-v1.z,2));
 }
 
-float findDistance(const Vec3f& a, const Vec3f& b)
-{
-    return sqrt(pow(a.x-b.x,2) + pow(a.y-b.y,2) + pow(a.z-b.z,2));
-}
-
-float findLength(const Vec3f& a)
-{
-    return sqrt(a.x*a.x + a.y*a.y + a.z*a.z);
-}
 
 void checkSphereIntersection(const Ray& ray,  const Scene& scene, const int& i, float& t_min, float& t_max, bool look_shadow, int& type_of_closest_object, int& index_of_closest_object )
 {
@@ -237,10 +235,10 @@ void checkTriangleIntersection(const Ray& ray,  const Scene& scene, const int& i
 
     float detA,beta,gamma,t;
 
-    detA=determinant(v0-v1, v0-v2, d);
-    beta = determinant(v0-o,v0-v2,d)/detA;
-    gamma = determinant(v0-v1,v0-o,d)/detA;
-    t = determinant(v0-v1,v0-v2,v0-o)/detA;
+    detA=getDeterminant(v0-v1, v0-v2, d);
+    beta = getDeterminant(v0-o,v0-v2,d)/detA;
+    gamma = getDeterminant(v0-v1,v0-o,d)/detA;
+    t = getDeterminant(v0-v1,v0-v2,v0-o)/detA;
 
     if(beta+gamma > 1)
     {
@@ -300,10 +298,10 @@ void checkMeshIntersection(const Ray& ray,  const Scene& scene, const int& i, in
         Vec3f v2 = scene.vertex_data[ mesh.faces[j].v2_id -1 ];
         float detA,beta,gamma,t;
 
-        detA=determinant(v0-v1, v0-v2, d);
-        beta = determinant(v0-o,v0-v2,d)/detA;
-        gamma = determinant(v0-v1,v0-o,d)/detA;
-        t = determinant(v0-v1,v0-v2,v0-o)/detA;
+        detA=getDeterminant(v0-v1, v0-v2, d);
+        beta = getDeterminant(v0-o,v0-v2,d)/detA;
+        gamma = getDeterminant(v0-v1,v0-o,d)/detA;
+        t = getDeterminant(v0-v1,v0-v2,v0-o)/detA;
 
         if(beta+gamma > 1)
         {
@@ -358,7 +356,7 @@ void getEffects( const Scene& scene, Vec3f& color, const Vec3f& hit_location, co
     Vec3f w_i, w_o, h, irradiance;
     float cos_theta, cos_alpha, squared_distance_to_light;
 
-    w_i = normalizeVector(light_location - hit_location);
+    w_i = unitVector(light_location - hit_location);
 
     /* Shadow Check */
     
@@ -367,7 +365,7 @@ void getEffects( const Scene& scene, Vec3f& color, const Vec3f& hit_location, co
     shadowRay.d = w_i;
     bool look_shadow = true;
     
-    float t_max = findDistance(light_location, hit_location);
+    float t_max = getDistance(light_location, hit_location);
 
     float t = INFTY;
     int type_of_closest_object = -1;
@@ -406,10 +404,10 @@ void getEffects( const Scene& scene, Vec3f& color, const Vec3f& hit_location, co
 
     cos_theta =  max(0.0f,dotProduct(w_i,normal));
 
-    squared_distance_to_light = pow(findDistance(hit_location, light_location),2);
+    squared_distance_to_light = pow(getDistance(hit_location, light_location),2);
 
-    w_o = normalizeVector(camera_location - hit_location);
-    h = normalizeVector(w_i+w_o);
+    w_o = unitVector(camera_location - hit_location);
+    h = unitVector(w_i+w_o);
     cos_alpha = max(0.0f, dotProduct(normal,h));
    
 
@@ -580,9 +578,9 @@ Vec3f recursive_func(const Scene& scene,  Ray& ray, Vec3f& camera_location, int 
                    
                     Vec3f w_o, w_r,k_m;
                     
-                    w_o = normalizeVector(camera_location - (ray.o+ray.d*t_min));
+                    w_o = unitVector(camera_location - (ray.o+ray.d*t_min));
                     
-                    w_r = normalizeVector(w_o*(-1)+normal*2 * (dotProduct(normal,w_o)) );
+                    w_r = unitVector(w_o*(-1)+normal*2 * (dotProduct(normal,w_o)) );
                     if(type_of_closest_object==0)
                     {
                         k_m = scene.materials[scene.spheres[index_of_closest_object].material_id -1 ].mirror;
