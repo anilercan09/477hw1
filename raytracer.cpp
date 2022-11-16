@@ -8,10 +8,6 @@
 using namespace std;
 using namespace parser;
 
-
-
-typedef unsigned char RGB[3];
-
 struct Ray
 {
     Vec3f o;
@@ -20,11 +16,11 @@ struct Ray
 
 Vec3f operator*(const Vec3f& v0,  const Vec3f& v1)
 {
-    Vec3f result;
-    result.x = v0.y * v1.z - v0.z * v1.y;
-    result.y = v0.z * v1.x - v0.x * v1.z;
-    result.z = v0.x * v1.y - v0.y * v1.x;
-    return result;
+    Vec3f res;
+    res.x = v0.y * v1.z - v0.z * v1.y;
+    res.y = v0.z * v1.x - v0.x * v1.z;
+    res.z = v0.x * v1.y - v0.y * v1.x;
+    return res;
 }
 
 Vec3f operator*(const Vec3f& v0, float n)
@@ -69,12 +65,8 @@ Vec3f operator/(const Vec3f& v0, float n)
 
 Vec3f unitVector(const Vec3f& v)
 {
-    Vec3f res;
     float length = sqrt( v.x * v.x + v.y * v.y + v.z * v.z );
-    res.x = v.x / length;
-    res.y = v.y / length;
-    res.z = v.z / length;
-    return res;
+    return v/length;
 }
 
 Vec3f hitPoint(const Ray& r, float t) //directly return res?
@@ -171,14 +163,13 @@ void checkSphereIntersection(const Ray& ray,  const Scene& scene, const int& i, 
     Sphere sphere = scene.spheres[i];
 
     Vec3f c = scene.vertex_data[sphere.center_vertex_id-1];
+    Vec3f tmp = ray.o - c;
 
     float r = sphere.radius;
 
     float A = dotProduct(ray.d, ray.d);
-	Vec3f tmp = ray.o - c;
 	float B = 2*dotProduct(ray.d, tmp);
 	float C = dotProduct(tmp, tmp)-r*r;
-
 	float disc = B*B - 4*A*C;
 
     if(disc<0)
@@ -189,12 +180,12 @@ void checkSphereIntersection(const Ray& ray,  const Scene& scene, const int& i, 
     {
         float t1 = (-1*B+sqrt(disc))/(2*A);
         float t2 = (-1*B-sqrt(disc))/(2*A);
-        float t = fmin(t1,t2);
+        float t = min(t1,t2);
 
 
         if(!look_shadow)
         {
-            if ( t < t_min && t > 0.00001 )
+            if ( t < t_min && t > 0.001 )
             {
 
                 t_min = t;
@@ -205,7 +196,7 @@ void checkSphereIntersection(const Ray& ray,  const Scene& scene, const int& i, 
         }
         else if(look_shadow)
         {
-            if ( t < t_min && t > 0.00001 && t<t_max)
+            if ( t < t_min && t > 0.001 && t<t_max)
             {
 
                 t_min = t;
@@ -233,12 +224,12 @@ void checkTriangleIntersection(const Ray& ray,  const Scene& scene, const int& i
     Vec3f v1 = scene.vertex_data[triangle.indices.v1_id -1 ];
     Vec3f v2 = scene.vertex_data[triangle.indices.v2_id -1 ];
 
-    float detA,beta,gamma,t;
+    float det_A,beta,gamma,t;
 
-    detA=getDeterminant(v0-v1, v0-v2, d);
-    beta = getDeterminant(v0-o,v0-v2,d)/detA;
-    gamma = getDeterminant(v0-v1,v0-o,d)/detA;
-    t = getDeterminant(v0-v1,v0-v2,v0-o)/detA;
+    det_A=getDeterminant(v0-v1, v0-v2, d);
+    beta = getDeterminant(v0-o,v0-v2,d)/det_A;
+    gamma = getDeterminant(v0-v1,v0-o,d)/det_A;
+    t = getDeterminant(v0-v1,v0-v2,v0-o)/det_A;
 
     if(beta+gamma > 1)
     {
@@ -256,7 +247,7 @@ void checkTriangleIntersection(const Ray& ray,  const Scene& scene, const int& i
     {
         if(!look_shadow)
             {
-                if(t<t_min && t > 0.00001)
+                if(t<t_min && t > 0.001)
                 {
                     t_min=t;
                     type_of_closest_object=1;
@@ -267,7 +258,7 @@ void checkTriangleIntersection(const Ray& ray,  const Scene& scene, const int& i
             }
             else if(look_shadow)
             {
-                if(t<t_min && t > 0.00001 && t < t_max)
+                if(t<t_min && t > 0.001 && t < t_max)
                 {
                     t_min=t;
                     type_of_closest_object=1;
@@ -296,12 +287,12 @@ void checkMeshIntersection(const Ray& ray,  const Scene& scene, const int& i, in
         Vec3f v0 = scene.vertex_data[ mesh.faces[j].v0_id -1 ];
         Vec3f v1 = scene.vertex_data[ mesh.faces[j].v1_id -1 ];
         Vec3f v2 = scene.vertex_data[ mesh.faces[j].v2_id -1 ];
-        float detA,beta,gamma,t;
+        float det_A,beta,gamma,t;
 
-        detA=getDeterminant(v0-v1, v0-v2, d);
-        beta = getDeterminant(v0-o,v0-v2,d)/detA;
-        gamma = getDeterminant(v0-v1,v0-o,d)/detA;
-        t = getDeterminant(v0-v1,v0-v2,v0-o)/detA;
+        det_A=getDeterminant(v0-v1, v0-v2, d);
+        beta = getDeterminant(v0-o,v0-v2,d)/det_A;
+        gamma = getDeterminant(v0-v1,v0-o,d)/det_A;
+        t = getDeterminant(v0-v1,v0-v2,v0-o)/det_A;
 
         if(beta+gamma > 1)
         {
@@ -319,7 +310,7 @@ void checkMeshIntersection(const Ray& ray,  const Scene& scene, const int& i, in
         {
             if(!look_shadow)
             {
-                if(t<t_min && t > 0.00001)
+                if(t<t_min && t > 0.001)
                 {
                     t_min=t;
                     type_of_closest_object=2;
@@ -330,7 +321,7 @@ void checkMeshIntersection(const Ray& ray,  const Scene& scene, const int& i, in
             }
             else if(look_shadow)
             {
-                if(t<t_min && t > 0.00001 && t < t_max)
+                if(t<t_min && t > 0.001 && t < t_max)
                 {
                     t_min=t;
                     type_of_closest_object=2;
